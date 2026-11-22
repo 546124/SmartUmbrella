@@ -38,6 +38,17 @@ class UmbrellaRepository(
         return OperationResult(true, "归还成功，已读取 $tag（模拟硬件）")
     }
 
+    /** A queue item is acknowledged locally only after the supplied uploader succeeds. */
+    suspend fun syncPending(uploader: suspend (SyncQueueEntity) -> Boolean): Int {
+        var syncedCount = 0
+        for (item in dao.getPendingSyncOnce()) {
+            if (!uploader(item)) break
+            dao.markSynced(item.id)
+            syncedCount++
+        }
+        return syncedCount
+    }
+
     private suspend fun recordOperation(slotNumber: Int, operation: String, tag: String?) {
         val now = System.currentTimeMillis()
         database.withTransaction {

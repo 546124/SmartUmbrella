@@ -35,6 +35,9 @@ interface UmbrellaDao {
     @Query("SELECT * FROM sync_queue WHERE synced = 0 ORDER BY createdAt")
     fun observePendingSync(): Flow<List<SyncQueueEntity>>
 
+    @Query("SELECT * FROM sync_queue WHERE synced = 0 ORDER BY createdAt")
+    suspend fun getPendingSyncOnce(): List<SyncQueueEntity>
+
     @Query("UPDATE sync_queue SET synced = 1 WHERE id = :id")
     suspend fun markSynced(id: Long)
 }

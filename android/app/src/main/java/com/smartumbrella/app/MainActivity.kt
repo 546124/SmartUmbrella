@@ -3,6 +3,7 @@ package com.smartumbrella.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,38 +21,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.smartumbrella.app.data.UmbrellaRepository
-import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class MainActivity : ComponentActivity() {
+    private val viewModel: UmbrellaViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val repository = (application as SmartUmbrellaApplication).repository
-        setContent { SmartUmbrellaTheme { UmbrellaScreen(repository) } }
+        setContent { SmartUmbrellaTheme { UmbrellaScreen(viewModel) } }
     }
 }
 
 @Composable
-fun UmbrellaScreen(repository: UmbrellaRepository) {
-    val slots by repository.slots.collectAsState(initial = emptyList())
-    val pending by repository.pendingSync.collectAsState(initial = emptyList())
-    val scope = rememberCoroutineScope()
-    var statusMessage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("就绪") }
-
-    LaunchedEffect(repository) { repository.initialize() }
+fun UmbrellaScreen(viewModel: UmbrellaViewModel) {
+    val slots by viewModel.slots.collectAsStateWithLifecycle()
+    val pending by viewModel.pendingSync.collectAsStateWithLifecycle()
+    val statusMessage by viewModel.statusMessage.collectAsStateWithLifecycle()
+    val busy by viewModel.busy.collectAsStateWithLifecycle()
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text("智能雨伞柜", style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(8.dp))
             Text("可借：${slots.count { it.hasUmbrella }}  / 空位：${slots.count { !it.hasUmbrella }}")
-            Text("待同步记录：${pending.size} · 离线队列已启用")
+            Text("待同步记录：${pending.size} · 后台同步已启用（演示模式）")
             Spacer(Modifier.height(12.dp))
 
             LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f)) {
@@ -63,12 +59,12 @@ fun UmbrellaScreen(repository: UmbrellaRepository) {
                             Text(if (slot.locked) "已锁定" else "已解锁")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(
-                                    enabled = slot.hasUmbrella,
-                                    onClick = { scope.launch { statusMessage = repository.borrow(slot.slotNumber).message } }
+                                    enabled = slot.hasUmbrella && !busy,
+                                    onClick = { viewModel.borrow(slot.slotNumber) }
                                 ) { Text("借出") }
                                 Button(
-                                    enabled = !slot.hasUmbrella,
-                                    onClick = { scope.launch { statusMessage = repository.returnUmbrella(slot.slotNumber).message } }
+                                    enabled = !slot.hasUmbrella && !busy,
+                                    onClick = { viewModel.returnUmbrella(slot.slotNumber) }
                                 ) { Text("归还") }
                             }
                         }
@@ -76,7 +72,7 @@ fun UmbrellaScreen(repository: UmbrellaRepository) {
                 }
             }
             Text(statusMessage, modifier = Modifier.padding(vertical = 8.dp))
-            Text("指纹、门锁与 RFID 当前使用本地模拟器")
+            Text("指纹、门锁、RFID 与同步服务当前均为模拟实现")
         }
     }
 }
