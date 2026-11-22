@@ -12,6 +12,12 @@ The WorkManager worker POSTs queued events as JSON to an HTTPS endpoint and ackn
 
 Payload fields: `eventId`, `operation`, `slotNumber`, `hardwareTag`, and `occurredAt`. No backend URL is configured by default, so the worker will not upload until one is supplied.
 
+## Generic Android-host hardware framework
+
+`UmbrellaHardware` is the application boundary; `ControllerUmbrellaHardware` validates slot numbers and delegates to `UmbrellaController`. `AndroidUsbBulkTransport` is a generic USB-host transport for a device that exposes bulk IN/OUT endpoints. It requires the user/system to grant USB permission first and currently uses newline-terminated ASCII. `LineProtocolUmbrellaController` demonstrates a placeholder command protocol (`VERIFY_FINGERPRINT`, `UNLOCK n`, `READ_RFID n`); **this is not a vendor protocol** and must be changed to match the purchased controller's documented SDK/protocol before connecting real equipment.
+
+The app intentionally remains wired to `SimulatedUmbrellaHardware`; physical unlocks are not enabled. Select the actual Android host, USB/RS-485 bridge, fingerprint module, RFID reader, and lock controller first, then implement the vendor-specific transport and permission lifecycle. Never power a cabinet lock from Android USB/GPIO: use a rated lock-control board with electrical protection and state feedback. Keep fingerprint templates on the authorized biometric device; expose only a verification result to the app.
+
 ## Hardware integration
 
-`ControllerUmbrellaHardware` is the production adapter boundary. Implement `UmbrellaController` using the actual approved board/vendor SDK or controller protocol, then inject that implementation in `SmartUmbrellaApplication`. The repository does not include a vendor SDK, device protocol, or hardware credentials; the app continues to use the safe local simulator until a concrete controller is available. Fingerprint templates must remain on the authorized biometric device and must not be sent to the backend.
+The repository does not include vendor SDKs, device protocol documents, hardware credentials, or a backend URL. No real device integration is claimed until the specific models have been tested.
