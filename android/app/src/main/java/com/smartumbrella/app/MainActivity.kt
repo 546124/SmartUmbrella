@@ -20,61 +20,63 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.smartumbrella.app.data.UmbrellaRepository
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { SmartUmbrellaTheme { UmbrellaScreen() } }
+        val repository = (application as SmartUmbrellaApplication).repository
+        setContent { SmartUmbrellaTheme { UmbrellaScreen(repository) } }
     }
 }
 
 @Composable
-fun UmbrellaScreen() {
-    val slots = remember {
-        mutableStateListOf(
-            SlotUi(1, true, false), SlotUi(2, true, false),
-            SlotUi(3, false, false), SlotUi(4, true, false),
-            SlotUi(5, false, false), SlotUi(6, true, false)
-        )
-    }
+fun UmbrellaScreen(repository: UmbrellaRepository) {
+    val slots by repository.slots.collectAsState(initial = emptyList())
+    val pending by repository.pendingSync.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
+    var statusMessage by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("就绪") }
+
+    LaunchedEffect(repository) { repository.initialize() }
 
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(24.dp)) {
             Text("智能雨伞柜", style = MaterialTheme.typography.headlineMedium)
-            Spacer(Modifier.height(16.dp))
-            Text("已占用：${slots.count { it.occupied }}  / 可借：${slots.count { !it.occupied }}")
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
+            Text("可借：${slots.count { it.hasUmbrella }}  / 空位：${slots.count { !it.hasUmbrella }}")
+            Text("待同步记录：${pending.size} · 离线队列已启用")
+            Spacer(Modifier.height(12.dp))
 
-            LazyVerticalGrid(columns = GridCells.Fixed(3), modifier = Modifier.weight(1f)) {
-                items(slots) { slot ->
+            LazyVerticalGrid(columns = GridCells.Fixed(2), modifier = Modifier.weight(1f)) {
+                items(slots, key = { it.slotNumber }) { slot ->
                     Card(modifier = Modifier.padding(8.dp).fillMaxWidth()) {
                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("伞位 ${slot.number}", style = MaterialTheme.typography.titleMedium)
-                            Text(if (slot.occupied) "有伞 · 红灯" else "空位 · 绿灯")
+                            Text("伞位 ${slot.slotNumber}", style = MaterialTheme.typography.titleMedium)
+                            Text(if (slot.hasUmbrella) "有伞 · 可借" else "空位 · 可归还")
+                            Text(if (slot.locked) "已锁定" else "已解锁")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = {
-                                    val index = slots.indexOf(slot)
-                                    slots[index] = slot.copy(occupied = true)
-                                }) { Text("借出") }
-                                Button(onClick = {
-                                    val index = slots.indexOf(slot)
-                                    slots[index] = slot.copy(occupied = false)
-                                }) { Text("归还") }
+                                Button(
+                                    enabled = slot.hasUmbrella,
+                                    onClick = { scope.launch { statusMessage = repository.borrow(slot.slotNumber).message } }
+                                ) { Text("借出") }
+                                Button(
+                                    enabled = !slot.hasUmbrella,
+                                    onClick = { scope.launch { statusMessage = repository.returnUmbrella(slot.slotNumber).message } }
+                                ) { Text("归还") }
                             }
                         }
                     }
                 }
             }
-
-            Button(onClick = { /* Later: vendor fingerprint SDK */ }, modifier = Modifier.fillMaxWidth()) {
-                Text("模拟指纹登录")
-            }
+            Text(statusMessage, modifier = Modifier.padding(vertical = 8.dp))
+            Text("指纹、门锁与 RFID 当前使用本地模拟器")
         }
     }
 }
-
-data class SlotUi(val number: Int, val occupied: Boolean, val locked: Boolean)
