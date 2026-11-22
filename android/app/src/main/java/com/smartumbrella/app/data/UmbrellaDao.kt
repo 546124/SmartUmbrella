@@ -32,6 +32,9 @@ interface UmbrellaDao {
     @Query("SELECT * FROM loan_events ORDER BY occurredAt DESC")
     fun observeEvents(): Flow<List<LoanEventEntity>>
 
+    @Query("SELECT * FROM loan_events WHERE id = :eventId")
+    suspend fun getEvent(eventId: Long): LoanEventEntity?
+
     @Query("SELECT * FROM sync_queue WHERE synced = 0 ORDER BY createdAt")
     fun observePendingSync(): Flow<List<SyncQueueEntity>>
 

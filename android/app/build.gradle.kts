@@ -14,8 +14,15 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "0.3.0"
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val syncApiUrl = providers.gradleProperty("SYNC_API_URL").orElse("").get()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "SYNC_API_URL", "\"$syncApiUrl\"")
+        val syncApiToken = providers.gradleProperty("SYNC_API_TOKEN").orElse("").get()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "SYNC_API_TOKEN", "\"$syncApiToken\"")
     }
 
     buildFeatures {

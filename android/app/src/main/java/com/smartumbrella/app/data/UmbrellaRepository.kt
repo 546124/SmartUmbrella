@@ -27,7 +27,7 @@ class UmbrellaRepository(
         if (!hardware.unlock(slotNumber)) return OperationResult(false, "伞柜解锁失败")
 
         recordOperation(slotNumber, "BORROW", null)
-        return OperationResult(true, "借伞成功（模拟硬件）")
+        return OperationResult(true, "借伞成功")
     }
 
     suspend fun returnUmbrella(slotNumber: Int): OperationResult {
@@ -35,19 +35,21 @@ class UmbrellaRepository(
         if (slot.hasUmbrella) return OperationResult(false, "该伞位已有雨伞")
         val tag = hardware.readRfid(slotNumber) ?: return OperationResult(false, "未读取到 RFID 标签")
         recordOperation(slotNumber, "RETURN", tag)
-        return OperationResult(true, "归还成功，已读取 $tag（模拟硬件）")
+        return OperationResult(true, "归还成功，已读取 $tag")
     }
 
-    /** A queue item is acknowledged locally only after the supplied uploader succeeds. */
-    suspend fun syncPending(uploader: suspend (SyncQueueEntity) -> Boolean): Int {
+    /** The caller should throw on upload failure so WorkManager retries without acknowledging the row. */
+    suspend fun syncPending(uploader: suspend (SyncQueueEntity) -> Unit): Int {
         var syncedCount = 0
         for (item in dao.getPendingSyncOnce()) {
-            if (!uploader(item)) break
+            uploader(item)
             dao.markSynced(item.id)
             syncedCount++
         }
         return syncedCount
     }
+
+    suspend fun eventForSync(item: SyncQueueEntity): LoanEventEntity? = dao.getEvent(item.eventId)
 
     private suspend fun recordOperation(slotNumber: Int, operation: String, tag: String?) {
         val now = System.currentTimeMillis()
