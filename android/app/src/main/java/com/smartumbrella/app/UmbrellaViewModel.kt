@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+enum class FlowMode { BORROW, RETURN }
+
 class UmbrellaViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = (application as SmartUmbrellaApplication).repository
 
@@ -31,6 +33,10 @@ class UmbrellaViewModel(application: Application) : AndroidViewModel(application
     val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
+    private val _flowMode = MutableStateFlow<FlowMode?>(null)
+    val flowMode: StateFlow<FlowMode?> = _flowMode.asStateFlow()
+    private val _selectedSlot = MutableStateFlow<Int?>(null)
+    val selectedSlot: StateFlow<Int?> = _selectedSlot.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -39,16 +45,53 @@ class UmbrellaViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun borrow(slotNumber: Int) = perform { repository.borrow(slotNumber) }
+    fun startBorrow(slotNumber: Int) {
+        if (_busy.value) return
+        _flowMode.value = FlowMode.BORROW
+        _selectedSlot.value = slotNumber
+        _statusMessage.value = "请按压指纹，确认借伞"
+    }
 
-    fun returnUmbrella(slotNumber: Int) = perform { repository.returnUmbrella(slotNumber) }
+    fun startReturn(slotNumber: Int) {
+        if (_busy.value) return
+        _flowMode.value = FlowMode.RETURN
+        _selectedSlot.value = slotNumber
+        _statusMessage.value = "请将雨伞放入伞位并靠近 RFID 读写区"
+    }
 
-    private fun perform(operation: suspend () -> OperationResult) {
+    fun confirmBorrow() {
+        val slotNumber = _selectedSlot.value ?: return
+        perform("借伞成功，请取走雨伞") { repository.borrow(slotNumber) }
+    }
+
+    fun confirmReturn() {
+        val slotNumber = _selectedSlot.value ?: return
+        perform("归还成功，请关闭柜门") { repository.returnUmbrella(slotNumber) }
+    }
+
+    fun cancelFlow() {
+        if (_busy.value) return
+        _flowMode.value = null
+        _selectedSlot.value = null
+        _statusMessage.value = "操作已取消"
+    }
+
+    fun borrow(slotNumber: Int) = perform("借伞成功") { repository.borrow(slotNumber) }
+
+    fun returnUmbrella(slotNumber: Int) = perform("归还成功") { repository.returnUmbrella(slotNumber) }
+
+    private fun perform(successText: String, operation: suspend () -> OperationResult) {
         if (_busy.value) return
         viewModelScope.launch {
             _busy.value = true
             try {
-                _statusMessage.value = operation().message
+                val result = operation()
+                _statusMessage.value = result.message
+                if (result.success) {
+                    _statusMessage.value = "$successText · ${result.message}"
+                    _flowMode.value = null
+                    _selectedSlot.value = null
+                }
             } catch (error: Exception) {
                 _statusMessage.value = "操作失败：${error.localizedMessage ?: "请稍后重试"}"
             } finally {
